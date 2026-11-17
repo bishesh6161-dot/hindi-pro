@@ -1,0 +1,12 @@
+import {Router} from 'express';
+import {anilist} from '../lib/http.js';
+const r=Router();
+const MEDIA=`id idMal title { romaji english native userPreferred } coverImage { large extraLarge } bannerImage description episodes duration status format genres averageScore popularity startDate {year month day} endDate {year month day} season seasonYear`;
+const SEARCH=`query ($search:String,$page:Int,$perPage:Int) { Page(page:$page,perPage:$perPage) { pageInfo { total currentPage lastPage hasNextPage } media(search:$search,type:ANIME,sort:SEARCH_MATCH) { ${MEDIA} } } }`;
+const INFO=`query ($id:Int) { Media(id:$id,type:ANIME) { ${MEDIA} } }`;
+const HOME=`query { Page(page:1,perPage:20) { media(type:ANIME,sort:TRENDING_DESC) { ${MEDIA} } } }`;
+r.get('/home',async(q,s)=>{try{const x=await anilist(HOME);s.json({success:true,data:x.data.Page.media});}catch(e){s.status(502).json({success:false,error:e.message});}});
+r.get('/search',async(q,s)=>{try{if(!q.query.keyword)return s.status(400).json({success:false,error:'keyword is required'});const x=await anilist(SEARCH,{search:q.query.keyword,page:Number(q.query.page)||1,perPage:20});s.json({success:true,...x.data.Page});}catch(e){s.status(502).json({success:false,error:e.message});}});
+r.get('/info',async(q,s)=>{try{const id=Number(q.query.id);if(!Number.isInteger(id)||id<1)return s.status(400).json({success:false,error:'valid AniList id required'});const x=await anilist(INFO,{id});s.json({success:true,data:x.data.Media});}catch(e){s.status(502).json({success:false,error:e.message});}});
+r.get('/episodes',async(q,s)=>{try{const id=Number(q.query.id);if(!Number.isInteger(id)||id<1)return s.status(400).json({success:false,error:'valid AniList id required'});const x=await anilist(INFO,{id});const m=x.data.Media;if(!m)return s.status(404).json({success:false,error:'anime not found'});s.json({success:true,anime_id:id,total:m.episodes,episodes:Array.from({length:m.episodes||0},(_,i)=>({number:i+1,url:`/api/watch?id=${id}&ep=${i+1}`}))});}catch(e){s.status(502).json({success:false,error:e.message});}});
+export default r;
